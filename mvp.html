@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de MVPs - RagnaLUZ</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #0f111a;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { color: #00e5ff; text-shadow: 0 0 10px rgba(0,229,255,0.3); }
+
+        /* Estilo do Formulário */
+        .form-container {
+            background: #1a1d2e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            border: 1px solid #303651;
+        }
+
+        input {
+            background: #0f111a;
+            border: 1px solid #303651;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input:focus { border-color: #00e5ff; }
+
+        .btn-add {
+            background: #00e5ff;
+            color: #0f111a;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* Estilo da Tabela */
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: #1a1d2e;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #303651;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 15px; border-bottom: 1px solid #303651; text-align: left; }
+        th { background: #242942; color: #00e5ff; }
+
+        .warp-box {
+            font-family: monospace;
+            background: #0f111a;
+            color: #76ff03;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .timer { font-weight: bold; font-size: 1.2em; color: #ffeb3b; }
+        .timer.ready { color: #76ff03; }
+
+        button {
+            cursor: pointer;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .btn-start { background: #00e5ff; color: #0f111a; }
+        .btn-reset { background: #ff5252; color: white; }
+        .btn-del { background: transparent; color: #ff5252; margin-left: 10px; border: 1px solid #ff5252; }
+    </style>
+</head>
+<body>
+
+    <h1>Painel de Respawns MVPs</h1>
+
+    <div class="form-container">
+        <input type="text" id="nome" placeholder="Nome do MVP">
+        <input type="text" id="warp" placeholder="Mapa (ex: prt_sew04)">
+        <input type="number" id="tempo" placeholder="Minutos">
+        <button class="btn-add" onclick="adicionarNovoMvp()">+ Adicionar</button>
+    </div>
+
+    <div class="container">
+        <table>
+            <thead>
+                <tr>
+                    <th>MVP</th>
+                    <th>Warp</th>
+                    <th>Cronômetro</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="lista-mvps"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let mvps = JSON.parse(localStorage.getItem('meus_mvps')) || [];
+        const timersAtivos = {};
+
+        function salvar() {
+            localStorage.setItem('meus_mvps', JSON.stringify(mvps));
+        }
+
+        function adicionarNovoMvp() {
+            const nome = document.getElementById('nome').value;
+            const warp = document.getElementById('warp').value;
+            const tempo = parseInt(document.getElementById('tempo').value);
+
+            if (!nome || !warp || !tempo) return alert("Preencha tudo!");
+
+            const novo = { id: Date.now(), nome, warp, tempo };
+            mvps.push(novo);
+            salvar();
+            renderizar();
+            
+            // Limpa campos
+            document.getElementById('nome').value = '';
+            document.getElementById('warp').value = '';
+            document.getElementById('tempo').value = '';
+        }
+
+        function removerMvp(id) {
+            mvps = mvps.filter(m => m.id !== id);
+            clearInterval(timersAtivos[id]);
+            salvar();
+            renderizar();
+        }
+
+        function formatar(seg) {
+            if (seg <= 0) return "VIVO!";
+            const h = Math.floor(seg / 3600);
+            const m = Math.floor((seg % 3600) / 60);
+            const s = seg % 60;
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+
+        function alternarTimer(id, min) {
+            const display = document.getElementById(`time-${id}`);
+            const btn = document.getElementById(`btn-${id}`);
+
+            if (timersAtivos[id]) {
+                clearInterval(timersAtivos[id]);
+                delete timersAtivos[id];
+                display.textContent = "00:00:00";
+                display.classList.remove('ready');
+                btn.textContent = "Iniciar";
+                btn.className = "btn-start";
+                return;
+            }
+
+            let restante = min * 60;
+            btn.textContent = "Resetar";
+            btn.className = "btn-reset";
+            
+            timersAtivos[id] = setInterval(() => {
+                restante--;
+                display.textContent = formatar(restante);
+                if (restante <= 0) {
+                    clearInterval(timersAtivos[id]);
+                    display.classList.add('ready');
+                    new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play();
+                }
+            }, 1000);
+        }
+
+        function renderizar() {
+            const corpo = document.getElementById('lista-mvps');
+            corpo.innerHTML = '';
+            mvps.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${m.nome}</strong></td>
+                    <td><span class="warp-box">@warp ${m.warp}</span></td>
+                    <td><span class="timer" id="time-${m.id}">00:00:00</span></td>
+                    <td>
+                        <button class="btn-start" id="btn-${m.id}" onclick="alternarTimer(${m.id}, ${m.tempo})">Iniciar</button>
+                        <button class="btn-del" onclick="removerMvp(${m.id})">✖</button>
+                    </td>
+                `;
+                corpo.appendChild(tr);
+            });
+        }
+
+        window.onload = renderizar;
+    </script>
+</body>
+</html>
